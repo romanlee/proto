@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.21)  # uses enable_language(HIP)
+# cmake_minimum_required(VERSION 3.21)  # uses enable_language(HIP)
+cmake_minimum_required(VERSION 3.20)  # uses enable_language(HIP)
 
 function(submodule_error module)
     message(FATAL_ERROR "\
@@ -46,6 +47,7 @@ option(MEMCHECK "turns on code in BoxData that checks that copying/aliasing is w
 option(MEMTRACK "print the amount of data allocated per protoMalloc" OFF)
 option(TIMERS "whether to turn on timers" ON)
 option(DISABLE_INIT_CHECKS "Disables automatic checks for uninitialized/NAN/inf values in BoxData" OFF)
+option(ENABLE_ROMAN "Build kernel fusion tests" OFF)
 
 set(VERBOSE 0 CACHE STRING "Verbosity of output")
 set(DIM 3 CACHE STRING "Dimensionality of examples")
@@ -297,4 +299,9 @@ endif()
 
 if(ENABLE_DOCUMENTATION)
     add_subdirectory(docs)
+endif()
+
+if(ENABLE_ROMAN)
+    message(STATUS "Kernel fusion tests are enabled")
+    add_subdirectory(roman)
 endif()
