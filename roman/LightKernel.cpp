@@ -1,18 +1,16 @@
 // modified from tests/ForallTests.cpp
-#include <gtest/gtest.h>
+// #include <gtest/gtest.h>
 #include "Proto.H"
 
-#define NUMCOMPS DIM+2
-
 using namespace Proto;
+
+#define NUMCOMPS DIM+2
 
 PROTO_KERNEL_START
 void consToPrim_temp(Var<double,DIM+2>& W, 
                      const Var<double, DIM+2>& U,
                      double gamma)
 {
-  // printf("hello\n");
-
   double rho = U(0);
   double v, v2=0.;
   W(0) = rho;
@@ -31,9 +29,9 @@ PROTO_KERNEL_END(consToPrim_temp, consToPrim)
 
 int main(){
 
-  std::cout << "Default memory type: " << parseMemType(MEMTYPE_DEFAULT) << std::endl;
+  PR_TIMER_SETFILE("roman/timings_LightKernel.txt")
 
-  // PR_TIME("main");
+  std::cout << "Default memory type: " << parseMemType(MEMTYPE_DEFAULT) << std::endl;
 
   // Hyper params
   const int nx = 2;
@@ -44,15 +42,21 @@ int main(){
   // Set up the input array
   Box srcBox = Box::Cube(nx);
   BoxData<double,DIM+2> U(srcBox,1);
+  BoxData<double,DIM+2> W;
 
   const double gamma = 1.4;  
 
   // Call light kernel N times
-  for (int i=0; i<N; i++){
-    cout << "i: " << i << "\n";
-    BoxData<double,DIM+2> W = forall<double,DIM+2>(consToPrim,U,gamma);
+  {
+    PR_TIME("loopoverlight");
+
+    for (int i=0; i<N; i++){
+      cout << "i: " << i << "\n";
+      W = forall<double,DIM+2>(consToPrim,U,gamma);
+    }
+
+    cudaDeviceSynchronize();
   }
-  cudaDeviceSynchronize();
 
   // Check the reuslts (from ForallTests.cpp)
   // EXPECT_EQ(U.box(),W.box());
@@ -66,6 +70,8 @@ int main(){
   // BoxData<double,DIM+2,HOST> W2_host(destBox);
   // W2.copyTo(W2_host);
   // consToPrimCheck(U_host,W2_host,gamma,destBox);
+
+  PR_TIMER_REPORT();
 
   return 0;
 }
