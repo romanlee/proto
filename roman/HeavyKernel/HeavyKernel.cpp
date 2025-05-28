@@ -9,33 +9,38 @@ using namespace Proto;
 PROTO_KERNEL_START
 void consToPrim_temp(Var<double,DIM+2>& W, 
                      const Var<double, DIM+2>& U,
-                     double gamma)
+                     double gamma, int N)
 {
-  double rho = U(0);
-  double v, v2=0.;
-  W(0) = rho;
-  
-  for (int i = 1; i <= DIM; i++)
-    {
-      v = U(i) / rho;
-      
-      W(i) = v;
-      v2 += v*v;
-    }
-  
-  W(DIM+1) = (U(DIM+1)-.5*rho*v2) * (gamma-1.);
+  for (int j=0; j<N; j++){
+    // printf("j=%d\n", j); // SCREWING THINGS UP FOR SOME REASON??
+
+    double rho = U(0);
+    double v, v2=0.;
+    W(0) = rho;
+    
+    for (int i = 1; i <= DIM; i++)
+      {
+        v = U(i) / rho;
+        
+        W(i) = v;
+        v2 += v*v;
+      }
+    
+    W(DIM+1) = (U(DIM+1)-.5*rho*v2) * (gamma-1.);
+
+  }
 }
 PROTO_KERNEL_END(consToPrim_temp, consToPrim)
 
 int main(){
 
-  PR_TIMER_SETFILE("roman/timings_LightKernel.txt")
+  PR_TIMER_SETFILE("roman/HeavyKernel/TIMINGS.txt")
 
   std::cout << "Default memory type: " << parseMemType(MEMTYPE_DEFAULT) << std::endl;
 
   // Hyper params
-  const int nx = 2;
-  const int N = 10;
+  const int nx = 512;
+  const int N = 100;
 
   cout << "DIM" << DIM << "\n";
 
@@ -46,16 +51,10 @@ int main(){
 
   const double gamma = 1.4;  
 
-  // Call light kernel N times
+  // Call heavy kernel
   {
-    PR_TIME("loopoverlight");
-
-    for (int i=0; i<N; i++){
-      cout << "i: " << i << "\n";
-      W = forall<double,DIM+2>(consToPrim,U,gamma);
-    }
-
-    cudaDeviceSynchronize();
+    PR_TIME("heavy");
+    W = forall<double,DIM+2>(consToPrim,U,gamma, N);
   }
 
   // Check the reuslts (from ForallTests.cpp)
