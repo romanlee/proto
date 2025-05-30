@@ -1,10 +1,22 @@
 // modified from tests/ForallTests.cpp
 // #include <gtest/gtest.h>
 #include "Proto.H"
+#include <filesystem>
 
 using namespace Proto;
 
 #define NUMCOMPS DIM+2
+// #define GET_TIMINGS 1
+
+PROTO_KERNEL_START
+void f_threshold_temp( Var<short>& a_tags,
+             Var<double, NUMCOMPS>& a_U)
+{
+  double thresh = 1.001;
+  if (a_U(0) > thresh) {a_tags(0) = 1;}
+  else {a_tags(0) = 0;};
+};
+PROTO_KERNEL_END(f_threshold_temp, f_threshold);
 
 PROTO_KERNEL_START
 void consToPrim_temp(Var<double,DIM+2>& W, 
@@ -32,21 +44,36 @@ PROTO_KERNEL_END(consToPrim_temp, consToPrim)
 
 int main(){
 
-  PR_TIMER_SETFILE("roman/LightKernel/TIMINGS.txt")
-
-  std::cout << "Default memory type: " << parseMemType(MEMTYPE_DEFAULT) << std::endl;
-
   // TODO make these hyper params
-  const int nx = 512;
+  const int nx = 16;
   const int N_ext = 10; // Set >1 for "light kernel" test, else  set =1
-  const int N_int = 1; // Set > 1 for "heavy kernel" test, else set =1
+  const int N_int = 1; // Set >1 for "heavy kernel" test, else set =1
+
+#ifdef GET_TIMINGS
+  std::filesystem::path currentPath = std::filesystem::current_path();
+  std::filesystem::path fullPath = currentPath / "TIMINGS.txt"; 
+  PR_TIMER_SETFILE(fullPath.string());
+#endif 
+
+  // std::cout << "Default memory type: " << parseMemType(MEMTYPE_DEFAULT) << std::endl;
 
   // Set up the input array
   Box srcBox = Box::Cube(nx);
+
+  // BoxData<double,DIM+2> U(srcBox,1);
+  // BoxData<double,DIM+2> W(srcBox,1);
+  // BoxData<double,DIM+2> V(srcBox,1);
+  // BoxData<short> X(srcBox);
+  // BoxData<double,DIM+2> Y(srcBox,1);
+
+  BoxData<double,DIM+2> a_U(srcBox,1);
   BoxData<double,DIM+2> U(srcBox,1);
   BoxData<double,DIM+2> W(srcBox,1);
+  BoxData<double,DIM+2> W_bar(srcBox,1);
+  BoxData<double,DIM+2> W_ave(srcBox,1);
 
-  // Stencil<double> S = 0.5*Shift::X(-1) + 0.5*Shift::X(+1); // This means: S[D_{i}] = 0.5*D_{i-1} + 0.5*D_{i+1}
+  // from tests/Tutorial.cpp
+  Stencil<double> S = 0.5*Shift::X(-1) + 0.5*Shift::X(+1); // This means: S[D_{i}] = 0.5*D_{i-1} + 0.5*D_{i+1}
 
   const double gamma = 1.4;  
 
@@ -55,20 +82,38 @@ int main(){
     PR_TIME("forall_zone");
 
     for (int i=0; i<N_ext; i++){
-      // cout << "i: " << i << "\n";
+      // // forall with consToPrim
+      // // forallInPlace<double,DIM+2,MEMTYPE_DEFAULT,1,1>(consToPrim,W,U,gamma,N_int);
+      // forallInPlace(consToPrim,W,U,gamma,N_int);
 
-      // auto W = forall<double,DIM+2>(consToPrim,U,gamma,N_int);
-      // forallInPlace<double,DIM+2,MEMTYPE_DEFAULT,1,1>(consToPrim,W,U,gamma,N_int);
-      forallInPlace(consToPrim,W,U,gamma,N_int);
+      // // Interleaving forall with Stencil
+      // forallInPlace(consToPrim,W,U,gamma,N_int);
+      // V |= S(W);
 
-      // Not sure this is necessary. This kernel seems to happen in serial no matter what
-      // cudaDeviceSynchronize(); 
+      // // forall with f_threshold
+      // forallInPlace(f_threshold,X,U);
 
-      // // TODO try interleaving a stencil
-      // X += S(W);
+      // // interleaving two different foralls
+      // forallInPlace(consToPrim,W,U,gamma,N_int);
+      // forallInPlace(f_threshold,X,U);
+
+      // // interleaving the same forall on different datas
+      // forallInPlace(consToPrim,W,U,gamma,N_int);
+      // forallInPlace(consToPrim,V,Y,gamma,N_int);
+
+      // use pattern from BoxOp_Euler.H
+      forallInPlace(consToPrim, W_bar, a_U, gamma, N_int);
+      U = Operator::deconvolve(a_U);
+      forallInPlace(consToPrim, W, U, gamma, N_int);
+      W_ave = Operator::_convolve(W, W_bar);
     }
 
   }
+
+#ifdef GET_TIMINGS
+  // Screws up Nsight systems (except when...the PR_TIMER_SETFILE is in the same dir as the .nsys-rep???)
+  PR_TIMER_REPORT();
+#endif
 
   // Check the reuslts (from ForallTests.cpp)
   // EXPECT_EQ(U.box(),W.box());
@@ -82,10 +127,6 @@ int main(){
   // BoxData<double,DIM+2,HOST> W2_host(destBox);
   // W2.copyTo(W2_host);
   // consToPrimCheck(U_host,W2_host,gamma,destBox);
-
-  // // Screws up Nsight systems except when...the PR_TIMER_SETFILE is in the same dir as
-  // // the .nsys-rep???
-  // PR_TIMER_REPORT();
 
   return 0;
 }
