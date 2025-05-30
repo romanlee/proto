@@ -6,7 +6,7 @@
 using namespace Proto;
 
 #define NUMCOMPS DIM+2
-// #define GET_TIMINGS 1
+#define GET_TIMINGS 1
 
 PROTO_KERNEL_START
 void f_threshold_temp( Var<short>& a_tags,
@@ -60,20 +60,20 @@ int main(){
   // Set up the input array
   Box srcBox = Box::Cube(nx);
 
-  // BoxData<double,DIM+2> U(srcBox,1);
-  // BoxData<double,DIM+2> W(srcBox,1);
-  // BoxData<double,DIM+2> V(srcBox,1);
-  // BoxData<short> X(srcBox);
-  // BoxData<double,DIM+2> Y(srcBox,1);
-
-  BoxData<double,DIM+2> a_U(srcBox,1);
   BoxData<double,DIM+2> U(srcBox,1);
   BoxData<double,DIM+2> W(srcBox,1);
-  BoxData<double,DIM+2> W_bar(srcBox,1);
-  BoxData<double,DIM+2> W_ave(srcBox,1);
+  BoxData<double,DIM+2> V(srcBox,1);
+  BoxData<short> X(srcBox);
+  BoxData<double,DIM+2> Y(srcBox,1);
 
-  // from tests/Tutorial.cpp
-  Stencil<double> S = 0.5*Shift::X(-1) + 0.5*Shift::X(+1); // This means: S[D_{i}] = 0.5*D_{i-1} + 0.5*D_{i+1}
+  // BoxData<double,DIM+2> a_U(srcBox,1);
+  // BoxData<double,DIM+2> U(srcBox,1);
+  // BoxData<double,DIM+2> W(srcBox,1);
+  // BoxData<double,DIM+2> W_bar(srcBox,1);
+  // BoxData<double,DIM+2> W_ave(srcBox,1);
+
+  // // from tests/Tutorial.cpp
+  // Stencil<double> S = 0.5*Shift::X(-1) + 0.5*Shift::X(+1); // This means: S[D_{i}] = 0.5*D_{i-1} + 0.5*D_{i+1}
 
   const double gamma = 1.4;  
 
@@ -82,9 +82,9 @@ int main(){
     PR_TIME("forall_zone");
 
     for (int i=0; i<N_ext; i++){
-      // // forall with consToPrim
-      // // forallInPlace<double,DIM+2,MEMTYPE_DEFAULT,1,1>(consToPrim,W,U,gamma,N_int);
-      // forallInPlace(consToPrim,W,U,gamma,N_int);
+      // forall with consToPrim
+      // forallInPlace<double,DIM+2,MEMTYPE_DEFAULT,1,1>(consToPrim,W,U,gamma,N_int);
+      forallInPlace(consToPrim,W,U,gamma,N_int);
 
       // // Interleaving forall with Stencil
       // forallInPlace(consToPrim,W,U,gamma,N_int);
@@ -101,12 +101,17 @@ int main(){
       // forallInPlace(consToPrim,W,U,gamma,N_int);
       // forallInPlace(consToPrim,V,Y,gamma,N_int);
 
-      // use pattern from BoxOp_Euler.H
-      forallInPlace(consToPrim, W_bar, a_U, gamma, N_int);
-      U = Operator::deconvolve(a_U);
-      forallInPlace(consToPrim, W, U, gamma, N_int);
-      W_ave = Operator::_convolve(W, W_bar);
+      // // use pattern from BoxOp_Euler.H (except that I do all the operations in place)
+      // forallInPlace(consToPrim, W_bar, a_U, gamma, N_int);
+      // // U = Operator::deconvolve(a_U);
+      // Operator::deconvolve(U, a_U);
+      // forallInPlace(consToPrim, W, U, gamma, N_int);
+      // // W_ave = Operator::_convolve(W, W_bar);
+      // Operator::_convolve(W_ave, W, W_bar);
     }
+
+    // ensures that the timer only stops once the last kernel is done
+    cudaDeviceSynchronize();
 
   }
 
